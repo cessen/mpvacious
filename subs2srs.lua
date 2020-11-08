@@ -58,6 +58,7 @@ local config = {
     menu_font_size = 25,
     note_tag = "subs2srs",      -- the tag that is added to new notes. change to "" to disable tagging
     tie_volumes = false,        -- if set to true, the volume of the outputted audio file depends on the volume of the player at the time of export
+    quote_sentence = false,     -- Add quotes around exported sentences or not.
 }
 
 local utils = require('mp.utils')
@@ -192,6 +193,18 @@ local function trim(str)
     return str
 end
 
+function split(inputstr, sep)
+    if sep == nil then
+        sep = "%s"
+    end
+    local t={}
+    for str in string.gmatch(inputstr, "([^"..sep.."]+)") do
+        table.insert(t, str)
+    end
+    return t
+end
+
+
 local base64d -- http://lua-users.org/wiki/BaseSixtyFour
 do
     local b = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
@@ -317,11 +330,38 @@ local function construct_media_filenames(sub)
 end
 
 local function construct_note_fields(sub_text, snapshot_filename, audio_filename)
-    return {
-        [config.sentence_field] = trim(sub_text),
-        [config.image_field] = string.format('<img src="%s" alt="snapshot">', snapshot_filename),
-        [config.audio_field] = string.format('[sound:%s]', audio_filename),
-    }
+    local image_fields = split(config.image_field, ",")
+    local sentence_fields = split(config.sentence_field, ",")
+    local audio_fields = split(config.audio_field, ",")
+
+    local fields = {}
+
+    -- Add image to all relevant fields.
+    for k, v in pairs(image_fields) do
+        fields[v] = string.format('<div><img src="%s" alt="snapshot"></div>', snapshot_filename)
+    end
+
+    -- Add sentence to all relevant fields.
+    for k, v in pairs(sentence_fields) do
+        if fields[v] == nil then
+            fields[v] = ""
+        end
+        if config.quote_sentence then
+            fields[v] = fields[v] .. "<div>\"" .. trim(sub_text) .. "\"</div>"
+        else
+            fields[v] = fields[v] .. "<div>" .. trim(sub_text) .. "</div>"
+        end
+    end
+
+    -- Add audio to all relevant fields.
+    for k, v in pairs(audio_fields) do
+        if fields[v] == nil then
+            fields[v] = ""
+        end
+        fields[v] = fields[v] .. string.format('<div>[sound:%s]</div>', audio_filename)
+    end
+
+    return fields
 end
 
 local function _(fn, param1)
